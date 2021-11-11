@@ -1,0 +1,157 @@
+package com.dn;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/*
+ * Napisati program koji kreira jednu praznu gajbu piva i tri gradjevinska
+ * radnika. Dva gradjevinska radnika se zovu Joza i Muhi i predstavljeni su
+ * zasebnim procesima definisanim pomocu klase Thread. Treci radnik se zove
+ * Gule, najmladji je od njih trojice i definisan je kao pozadinski proces
+ * pomocu interfejsa Runnable. (5 poena)
+ * 
+ * Radni dan starije dvojce radnika se sastoji samo od ispijanja piva u
+ * hladovini, pri cemu svako od njih moze u toku dana da popije po 50 piva,
+ * posle cega zavrsava svoj "radni" dan. (5 poena)
+ * 
+ * Posto je najmladji, Gule po ceo dan odlazi do obliznjeg diskonta i kupuje
+ * pivo drugoj dvojci radnika. Oni mu za ovo, naravno, daju nesto novca, a kako
+ * diskont stalno nudi razne akcije, Gule svaki put donese razlicit broj flasa
+ * piva. Ovo je vec dato i potrebno je samo pozvati metod Pivo::kupi. (5 poena)
+ * 
+ * Sinhronizovati klasu Gajba tako da se ni u kom slučaju ne izgubi ni jedno
+ * pivo. Takodje, blokirati radnika koji pokusa da uzme pivo iz prazne gajbe
+ * ili stavi pivo u punu gajbu. U gajbu može stati najvise 12 piva. Odblokirati
+ * radnike cim se stvore uslovi za nastavak njihovog "rada". (10 poena)
+ * 
+ * Obratiti paznju na elegantnost i objektnu orijentisanost realizacije i stil
+ * resenja. Za program koji se ne kompajlira, automatski se dobija 0 poena bez
+ * daljeg pregledanja.
+ */
+public class Program {
+	public static void main(String[] args) {
+		Gajba gajba = new Gajba();
+
+		RadnikThread joza = new RadnikThread(gajba);
+		joza.setName("Joza");
+		joza.start();
+
+		RadnikThread muhi = new RadnikThread(gajba);
+		muhi.setName("Muhi");
+		muhi.start();
+
+		Thread gule = new Thread(new RadnikRunnable(gajba));
+		gule.setDaemon(true);
+		gule.setName("Gule");
+		gule.start();
+
+	}
+}
+
+class RadnikThread extends Thread {
+	private final Gajba gajba;
+
+	public RadnikThread(Gajba gajba) {
+		this.gajba = gajba;
+		setDaemon(false);
+	}
+
+	@Override
+	public void run() {
+		int i = 0;
+		while (!Thread.interrupted() && i < 50) {
+			Pivo pivo = null;
+			try {
+				pivo = gajba.uzmi();
+				pivo.ispij();
+				i++;
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		System.out.println(this.getName()+" je završio rad za ovaj dan.");
+	}
+}
+
+class RadnikRunnable implements Runnable {
+	private final Gajba gajba;
+	
+	public RadnikRunnable(Gajba gajba) {
+		this.gajba = gajba;
+	}
+
+	@Override
+	public void run() {
+
+		while (!Thread.interrupted()) {
+			Pivo[] kupljenaPiva = Pivo.kupi();
+			for(int i = 0 ; i < kupljenaPiva.length ; i++ ) {
+				try {
+					gajba.stavi(kupljenaPiva[i]);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+
+	}
+
+}
+
+class Gajba {
+
+	private List<Pivo> sadrzaj = new ArrayList<>();
+
+	public synchronized void stavi(Pivo pivo) throws InterruptedException {
+		while(sadrzaj.size() == 12 ) {
+			wait();
+		}
+		sadrzaj.add(pivo);
+		notifyAll(); 
+	}
+
+	public synchronized Pivo uzmi() throws InterruptedException {
+		while(sadrzaj.size() == 0 ) {
+			wait();
+		}
+		notifyAll(); 
+		return sadrzaj.remove(0);
+		
+	}
+}
+
+class Pivo {
+
+	public void ispij() {
+		System.out.println(Thread.currentThread().getName() + " pije " + opis + " pivo.");
+		try {
+			Thread.sleep((long) (500 + 500 * Math.random()));
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	public static Pivo[] kupi() {
+		int n = (int) (1 + 5 * Math.random());
+		Pivo[] piva = new Pivo[n];
+		for (int i = 0; i < n; i++) {
+			piva[i] = new Pivo();
+		}
+		System.out.println(Thread.currentThread().getName() + " kupuje " + n + " piva.");
+		try {
+			Thread.sleep((long) (1000 + 1000 * Math.random()));
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+		return piva;
+	}
+
+	private final String opis;
+
+	private Pivo() {
+		opis = VRSTE[(int) (VRSTE.length * Math.random())];
+	}
+
+	private static final String[] VRSTE = { "Lav", "Lav Twist", "Lav Swing", "Lav Tamni", "Dundjerski", "Jelen",
+			"Jelen Cool", "Jelen Warm", "Jelen Fresh", "Vajfert", };
+}

@@ -1,0 +1,165 @@
+package com.dn;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/*
+ * Napisati program koji kreira jednu Deda Mrazovu radionicu poklona i cetiri
+ * vilenjaka. Vilenjaci koji rade u radionici se zovu Maglor, Mrazdalf,
+ * Vetromir i Snegolas i definisani su kao zasebni procesi. Prva dva vilenjaka
+ * su definisana pomocu klase Thread kao korisnicki procesi, a druga dva pomocu
+ * interfejsa Runnable kao pozadinski procesi. (5 poena)
+ * 
+ * Radni dan prva dva vilenjaka se sastoji samo od proizvodnje igracaka, pri
+ * cemu svako od njih moze u toku dana da napravi po 50 igracaka, posle cega
+ * zavrsavaju svoj radni dan. (5 poena)
+ * 
+ * Druga dva vilenjaka po ceo dan pakuju poklone u koje stavljaju po jednu
+ * igracku (pozivajuci metod Igracka::upakuj). (5 poena)
+ * 
+ * Sinhronizovati klasu Radionica tako da se ni u kom slucaju ne izgube
+ * igracke. Takodje, blokirati vilenjaka koji pokusa da upakuje poklon bez
+ * igracke ili napravi novu igracku ako je radionica puna. Na stolu u radionici
+ * moze da stane najvise 10 igracaka. Odblokirati vilenjake cim se stvore
+ * uslovi za nastavak njihovog rada. (10 poena)
+ * 
+ * Obratiti paznju na elegantnost i objektnu orijentisanost realizacije i stil
+ * resenja. Za program koji se ne kompajlira, automatski se dobija 0 poena bez
+ * daljeg pregledanja.
+ */
+public class Program {
+
+	public static void main(String[] args) {
+		Radionica radionica = new Radionica();
+		
+		GlavniVilenjak maglor = new GlavniVilenjak(radionica);
+		maglor.setName("Maglor");
+		maglor.setDaemon(false);
+		maglor.start();
+		
+		GlavniVilenjak mrazdlaf = new GlavniVilenjak(radionica);
+		mrazdlaf.setName("Mrazdlaf");
+		mrazdlaf.setDaemon(false);
+		mrazdlaf.start();
+		
+		Thread vetromir = new Thread(new PomocniVilenjak(radionica));
+		vetromir.setDaemon(true);
+		vetromir.setName("Vetromir");
+		vetromir.start();
+		
+		Thread snegolas  = new Thread(new PomocniVilenjak(radionica));
+		snegolas.setDaemon(true);
+		snegolas.setName("Snegolas");
+		snegolas.start();
+	}
+}
+
+class GlavniVilenjak extends Thread {
+	private final Radionica radionica ;
+	
+	public GlavniVilenjak(Radionica radionica) {
+		this.radionica = radionica ;
+	}
+	
+	@Override
+	public void run() {
+		int i = 0; 
+		while(!interrupted() && i < 50) {
+			try {
+				radionica.staviNaSto(new Igracka());
+				i++;
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		
+	}	
+}
+
+class PomocniVilenjak implements Runnable{
+	private final Radionica radionica ;
+	
+	public PomocniVilenjak(Radionica radionica) {
+		this.radionica = radionica ;
+	}
+	
+	@Override
+	public void run() {
+		while(!Thread.interrupted() ) {
+			Igracka igrackaZaUpakivanje;
+			try {
+				igrackaZaUpakivanje = radionica.uzmiSaStola();
+				igrackaZaUpakivanje.upakuj();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			
+		}
+		
+	}
+	
+}
+
+class Radionica {
+
+	private List<Igracka> sto = new ArrayList<>();
+
+	public synchronized void staviNaSto(Igracka igracka) throws InterruptedException {
+		while(sto.size() == 10 ) {
+			wait();
+		}
+		sto.add(igracka);
+		notifyAll(); 
+	}
+
+	public synchronized Igracka uzmiSaStola() throws InterruptedException {
+		while(sto.size() == 0 ) {
+			wait();
+		}
+		notifyAll(); 
+		return sto.remove(0);
+		// Ili mozda samo notify
+	}
+}
+
+class Igracka {
+
+	public Igracka() {
+		String boja = BOJE[(int) (BOJE.length * Math.random())];
+		String zivotinja = ZIVOTINJE[(int) (ZIVOTINJE.length * Math.random())];
+		this.opis = boja + " " + zivotinja;
+		System.out.println(Thread.currentThread().getName() + " pravi " + opis + ".");
+		try {
+			Thread.sleep((long) (500 + 500 * Math.random()));
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	public void upakuj() {
+		System.out.println(Thread.currentThread().getName() + " pakuje " + opis + ".");
+		try {
+			Thread.sleep((long) (500 + 500 * Math.random()));
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	private static final String[] BOJE = {
+			"Plavog",
+			"Crvenog",
+			"Zelenog",
+			"Belog",
+			"Zlatnog",
+	};
+
+	private static final String[] ZIVOTINJE = {
+			"medu",
+			"zeku",
+			"papagaja",
+			"irvasa",
+			"lava",
+	};
+
+	private final String opis;
+}
